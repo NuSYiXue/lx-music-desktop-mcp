@@ -131,6 +131,18 @@ Cline 在扩展设置里），照抄上面 Claude Desktop 的写法即可。
 播放是异步的：`lx_play` 返回成功只代表播放已开始加载，真的出声要几秒钟。
 等几秒再用 `lx_status` 确认。短于这个时间查到的 `error` / `stoped` 是正常过渡态。
 
+**Q：调用播放控制后，状态没有立刻变**
+
+`lx_control` 的 pause / play / volume / mute 都是先改 renderer 侧的状态、
+再由它回传上来，实测有 **1~2 秒**延迟。发出命令后等 2 秒再查 `lx_status`；
+短于这个时间读到旧值，不代表命令失败。
+
+**Q：`seek` 报 `Invalid offset`**
+
+`seek` 的上限由服务端按**当前歌曲时长**校验。歌曲还没加载出时长时
+（`lx_status` 里 `duration` 为 0），任何跳转都会被合法拒绝。
+这是 LX 的状态，不是 server 的错误。
+
 **Q：一次加很多歌会很慢吗？**
 
 `lx_batch_add` 内置并发（5 路）和限流，几十首在十几秒内能完成。
