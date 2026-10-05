@@ -5,6 +5,8 @@
 
 # Reasonix 会话/技能数据
 .reasonix/
+# Reasonix 自动生成的项目级配置：含本机绝对路径与个人偏好，不进仓库
+reasonix.toml
 
 # 编辑器 / 系统
 .vscode/
