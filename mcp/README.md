@@ -108,6 +108,26 @@ Cline 在扩展设置里），照抄上面 Claude Desktop 的写法即可。
 **不要让模型自己拼装或裁剪歌曲对象**——那会导致歌曲明明进了歌单却永远播不出来。
 `lx-search` 之类的工具也不会把完整歌曲信息丢给模型，返回的就是精简列表加 ref。
 
+### 音质等级
+
+从高到低：`flac24bit` > `flac` > `320k` > `128k`。
+
+`lx_search` 的 `minQuality` 就是按这个层级过滤的；返回结果里每首歌的 `quality`
+字段会列出该曲可用的全部等级。
+
+### 歌手匹配等级
+
+`lx_search` 传了 `matchSinger` 之后，每条结果会带 `matchLevel`：
+
+| 值 | 含义 |
+|---|---|
+| `exact` | 原唱 |
+| `partial` | 合作 / feat |
+| `none` | 翻唱 |
+
+`lx_batch_add` 返回的 `uncertain` 列表，就是「找到了但 `matchLevel` 不是 `exact`」的那些歌，
+值得向用户提一句。
+
 ---
 
 ## 常见问题
