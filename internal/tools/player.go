@@ -2,7 +2,9 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -104,16 +106,48 @@ func registerLyric(s *mcp.Server, d *Deps) {
 // lx_queue
 // ---------------------------------------------------------------------------
 
+// queueOutput 是对模型暴露的精简队列。原样透传整队列会直接撑爆上下文
+// （一个播放列表可能几百首），所以同样只给 ref。
+type queueOutput struct {
+	ListID       string    `json:"listId"`
+	CurrentIndex int       `json:"currentIndex"`
+	Count        int       `json:"count"`
+	Hint         string    `json:"hint,omitempty"`
+	Songs        []songRef `json:"songs"`
+}
+
 func registerQueue(s *mcp.Server, d *Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "lx_queue",
-		Description: "获取当前播放队列。返回 listId、currentIndex、count、list；" +
-			"list 里 currentIndex 位置是当前歌曲，之后的是待播。每首歌都带 ref，可用于 lx_play。",
+		Description: "获取当前播放队列。返回 listId、currentIndex、count、songs；" +
+			"songs 里 currentIndex 位置是当前歌曲（currentIndex 为 -1 表示队列为空），之后的是待播。" +
+			"每首歌都带 ref，可用于 lx_play。",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 		raw, err := d.API.PlayerQueue(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
-		return textResult(string(raw))
+		var resp struct {
+			ListID       string            `json:"listId"`
+			CurrentIndex int               `json:"currentIndex"`
+			Count        int               `json:"count"`
+			List         []json.RawMessage `json:"list"`
+		}
+		if err := json.Unmarshal(raw, &resp); err != nil {
+			return nil, nil, fmt.Errorf("解析播放队列失败：%w", err)
+		}
+
+		// 把队列里的歌全部入缓存，才能给出可操作的 ref。
+		items := d.Store.PutAll(resp.List)
+		out := queueOutput{
+			ListID:       resp.ListID,
+			CurrentIndex: resp.CurrentIndex,
+			Count:        len(items),
+			Songs:        toSongRefs(items),
+		}
+		if len(items) == 0 {
+			out.Hint = "当前播放队列是空的。"
+		}
+		return jsonResult(out)
 	})
 }
