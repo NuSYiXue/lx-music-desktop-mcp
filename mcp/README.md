@@ -91,7 +91,7 @@ Cline 在扩展设置里），照抄上面 Claude Desktop 的写法即可。
 | 工具 | 用途 |
 |---|---|
 | `lx_status` | 当前播放状态（歌名、歌手、进度、音量…） |
-| `lx_control` | 播放 / 暂停 / 切歌 / 跳转 / 音量 / 静音 / 收藏 |
+| `lx_control` | 播放 / 暂停 / 切歌 / 跳转 / 音量（直接设定或相对加减） / 静音 / 收藏 |
 | `lx_lyric` | 当前歌词（LRC 纯文本，或全部歌词类型） |
 | `lx_queue` | 当前播放队列 |
 | `lx_search` | 搜索歌曲（酷我 / 酷狗 / 咪咕 / QQ音乐 / 网易云） |
@@ -156,6 +156,19 @@ Cline 在扩展设置里），照抄上面 Claude Desktop 的写法即可。
 `lx_control` 的 pause / play / volume / mute 都是先改 renderer 侧的状态、
 再由它回传上来，实测有 **1~2 秒**延迟。发出命令后等 2 秒再查 `lx_status`；
 短于这个时间读到旧值，不代表命令失败。
+
+**Q：`volume_up` / `volume_down` 一次调多少？**
+
+不传 `value` 时一次调 4（与 LX 自己的音量快捷键一致：renderer 侧
+`handleSetVolumeUp` 的 step 是 `0.04`，换算到这个 0-100 分制就是 4）；
+传了 `value` 就按传入的步长走。
+
+调到两端会**停住**：加过头停在 100、减过头停在 1，都不报错，所以连着调几次是安全的。
+返回值直接给出新音量（`{"ok":true,"action":"volume_up","volume":51}`），不必再查一次。
+
+server 侧会记住 **5 秒内**自己设过的音量，作为下一次相对增减的基准——这是为了绕开
+renderer 的回传延迟（见上一条 Q）。超过 5 秒就回落到读 `lx_status`；所以你要是中途
+手动拖了 LX 的音量滑块，下一次增减依然基于真实值。
 
 **Q：`seek` 报 `Invalid offset`**
 

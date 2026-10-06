@@ -41,8 +41,9 @@ func main() {
 	)
 
 	tools.Register(server, &tools.Deps{
-		API:   lxapi.New(base),
-		Store: musicstore.New(musicstore.DefaultLimit),
+		API:    lxapi.New(base),
+		Store:  musicstore.New(musicstore.DefaultLimit),
+		Volume: tools.NewVolumeTracker(),
 	})
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {

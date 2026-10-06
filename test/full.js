@@ -176,10 +176,14 @@ async function main () {
     const st0 = await expectOk('默认调用', 'lx_status', {})
     ok('包含 status 与 name 字段', !!(st0 && st0.status !== undefined && st0.name !== undefined),
       st0 ? JSON.stringify(st0).slice(0, 110) : '')
+    // 要恢复的字段必须**显式**取：lx_status 的默认返回不含 volume 与 mute，
+    // 从 st0 上读永远是 undefined，「收尾恢复音量」那段等于没跑
+    // （真实踩到过：跑完测试音量永远停在 55）。
+    const stSave = bodyOf(await call('lx_status', { filter: 'status,volume,mute' }))
     restore = {
-      status: st0 && st0.status,
-      volume: st0 && st0.volume,
-      mute: st0 && st0.mute,
+      status: stSave ? stSave.status : (st0 && st0.status),
+      volume: stSave && stSave.volume,
+      mute: stSave && stSave.mute,
     }
 
     const stFiltered = await expectOk('filter 指定字段', 'lx_status', { filter: 'name,singer' })
@@ -245,6 +249,39 @@ async function main () {
     ok('音量已变为 55', !!(volBody && volBody.volume === 55), JSON.stringify(volBody))
     await expectErr('volume 超出范围应报错', 'lx_control', { action: 'volume', value: 101 })
     await expectErr('volume 为 0 应报错', 'lx_control', { action: 'volume', value: 0 })
+
+    // 相对增减。基准是上一步刚设的 55；server 侧有短期音量记忆，
+    // 所以连续调用不会因为 renderer 回传延迟而丢步。
+    const downStep = await expectOk('volume_down 用默认步长', 'lx_control', { action: 'volume_down' })
+    ok('volume_down 返回新音量 51', !!(downStep && downStep.volume === 51), JSON.stringify(downStep))
+    await sleep(2000)
+    const stDown = bodyOf(await call('lx_status', { filter: 'volume' }))
+    ok('volume_down 后实际音量为 51', !!(stDown && stDown.volume === 51), JSON.stringify(stDown))
+
+    const upStep = await expectOk('volume_up 指定步长 22', 'lx_control', { action: 'volume_up', value: 22 })
+    ok('volume_up 返回新音量 73', !!(upStep && upStep.volume === 73), JSON.stringify(upStep))
+    await sleep(2000)
+    const stUp = bodyOf(await call('lx_status', { filter: 'volume' }))
+    ok('volume_up 后实际音量为 73', !!(stUp && stUp.volume === 73), JSON.stringify(stUp))
+
+    const topStep = await expectOk('volume_up 越过上限不报错', 'lx_control', { action: 'volume_up', value: 100 })
+    ok('返回值被夹在 100', !!(topStep && topStep.volume === 100), JSON.stringify(topStep))
+    await sleep(2000)
+    const stTop = bodyOf(await call('lx_status', { filter: 'volume' }))
+    ok('实际上限被夹在 100', !!(stTop && stTop.volume === 100), JSON.stringify(stTop))
+
+    const bottomStep = await expectOk('volume_down 越过下限不报错', 'lx_control', { action: 'volume_down', value: 100 })
+    ok('返回值被夹在 1', !!(bottomStep && bottomStep.volume === 1), JSON.stringify(bottomStep))
+    await sleep(2000)
+    const stBottom = bodyOf(await call('lx_status', { filter: 'volume' }))
+    ok('实际下限被夹在 1', !!(stBottom && stBottom.volume === 1), JSON.stringify(stBottom))
+
+    await expectErr('volume_up 步长越界应报错', 'lx_control', { action: 'volume_up', value: 101 })
+    await expectErr('volume_down 负步长应报错', 'lx_control', { action: 'volume_down', value: -1 })
+
+    // 复位回 55：后面的 mute 测试与收尾恢复都以此为基准。
+    await expectOk('音量复位为 55', 'lx_control', { action: 'volume', value: 55 })
+    await sleep(2000)
 
     await expectOk('mute 开', 'lx_control', { action: 'mute', mute: true })
     await sleep(400)

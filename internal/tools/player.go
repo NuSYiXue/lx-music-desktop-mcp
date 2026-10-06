@@ -41,8 +41,8 @@ func registerStatus(s *mcp.Server, d *Deps) {
 // ---------------------------------------------------------------------------
 
 type controlInput struct {
-	Action string  `json:"action" jsonschema:"要执行的动作。play 播放或继续、pause 暂停、next 下一首、prev 上一首、seek 跳转到指定秒数、volume 设置音量、mute 静音开关、collect 收藏当前歌曲、uncollect 取消收藏"`
-	Value  float64 `json:"value,omitempty" jsonschema:"仅 seek 和 volume 需要。seek 传秒数，volume 传 1 到 100"`
+	Action string  `json:"action" jsonschema:"要执行的动作。play 播放或继续、pause 暂停、next 下一首、prev 上一首、seek 跳转到指定秒数、volume 设置音量、volume_up 音量加、volume_down 音量减、mute 静音开关、collect 收藏当前歌曲、uncollect 取消收藏"`
+	Value  float64 `json:"value,omitempty" jsonschema:"仅 seek 和音量类动作需要。seek 传秒数，volume 传 1 到 100，volume_up 与 volume_down 传步长（不传则默认 4）"`
 	Mute   bool    `json:"mute,omitempty" jsonschema:"仅 action 取 mute 时使用。true 静音、false 取消静音"`
 }
 
@@ -50,7 +50,8 @@ func registerControl(s *mcp.Server, d *Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "lx_control",
 		Description: "控制播放：播放、暂停、切歌、跳转进度、调音量、静音、收藏/取消收藏。" +
-			"跳转和调音量通过 value 传参，静音开关通过 mute 传参。",
+			"跳转和音量通过 value 传参，静音开关通过 mute 传参。" +
+			"音量可以直接设定（volume 给目标值），也可以相对增减（volume_up 调大、volume_down 调小）。",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in controlInput) (*mcp.CallToolResult, any, error) {
 		action := lxapi.ControlAction(in.Action)
 		var value float64
@@ -61,14 +62,28 @@ func registerControl(s *mcp.Server, d *Deps) {
 			}
 			value = in.Value
 		case lxapi.ActionVolume:
-			if in.Value < 1 || in.Value > 100 {
+			if in.Value < minVolume || in.Value > maxVolume {
 				return nil, nil, errors.New("volume 需要 value，取值 1 到 100")
 			}
 			value = in.Value
+		case lxapi.ControlAction(actionVolumeUp), lxapi.ControlAction(actionVolumeDown):
+			step, err := parseVolumeStep(in)
+			if err != nil {
+				return nil, nil, err
+			}
+			next, err := adjustVolume(ctx, d, in.Action == actionVolumeUp, step)
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonResult(map[string]any{"ok": true, "action": in.Action, "volume": next})
 		}
 
 		if _, err := d.API.Control(ctx, action, value, in.Mute); err != nil {
 			return nil, nil, err
+		}
+		// 绝对设定也要记进缓存，好让随后的相对增减基于这个新值。
+		if action == lxapi.ActionVolume {
+			d.Volume.remember(int(value))
 		}
 		return jsonResult(map[string]any{"ok": true, "action": in.Action})
 	})

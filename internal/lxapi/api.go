@@ -25,6 +25,27 @@ func (c *Client) Status(ctx context.Context, filter string) (json.RawMessage, er
 	return c.do(ctx, request{method: http.MethodGet, path: "/status", query: q})
 }
 
+// CurrentVolume 读取当前音量（0-100）。
+//
+// 音量在 renderer 侧生效后才由它回传，所以刚设完音量立刻读可能拿到旧值；
+// 连续增减的精度由 tools 层的短路缓存负责（见 tools.VolumeTracker）。
+func (c *Client) CurrentVolume(ctx context.Context) (int, error) {
+	raw, err := c.Status(ctx, "volume")
+	if err != nil {
+		return 0, err
+	}
+	var resp struct {
+		Volume *int `json:"volume"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return 0, fmt.Errorf("解析音量失败：%w", err)
+	}
+	if resp.Volume == nil {
+		return 0, fmt.Errorf("LX 的 /status 没有返回 volume 字段")
+	}
+	return *resp.Volume, nil
+}
+
 // Lyric 返回当前歌曲的 LRC 歌词纯文本。
 func (c *Client) Lyric(ctx context.Context) ([]byte, error) {
 	return c.do(ctx, request{method: http.MethodGet, path: "/lyric"})

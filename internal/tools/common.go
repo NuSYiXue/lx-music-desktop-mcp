@@ -21,8 +21,9 @@ import (
 
 // Deps 是所有工具共享的依赖。
 type Deps struct {
-	API   *lxapi.Client
-	Store *musicstore.Store
+	API    *lxapi.Client
+	Store  *musicstore.Store
+	Volume *VolumeTracker
 }
 
 // jsonResult 把值序列化成紧凑 JSON 文本返回。
