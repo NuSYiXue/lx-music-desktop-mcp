@@ -163,9 +163,10 @@ Cline 在扩展设置里），照抄上面 Claude Desktop 的写法即可。
 ## 升级
 
 1. 用新版 `lx-music-mcp.exe` 覆盖 `%UserProfile%\.lx-music-desktop-mcp\lx-music-mcp.exe`；
+   如果 `README.md` 也更新了，一并覆盖过去（它记录当前的用法与已知坑）。
 2. 在 host 里重连该 server，或让它实际连接一次（触发工具描述刷新）。
 
-就这两步——因为只有一个位置，**不需要同步任何副本**。
+就这样——因为只有一个位置，**不需要同步任何副本**。
 
 ---
 
@@ -182,6 +183,26 @@ Cline 在扩展设置里），照抄上面 Claude Desktop 的写法即可。
 | `lx_playlist_songs` | 查看 / 追加 / 移除 / 整体替换歌单里的歌 |
 | `lx_play` | 播放歌单里的指定歌曲 |
 | `lx_batch_add` | 批量找歌并入库：一次完成「建歌单 → 并发搜索 → 过滤非原唱版本 → 分批入库」 |
+
+### `lx_status` 返回哪些字段
+
+不传 `filter` 时的默认返回：
+`status` `name` `singer` `albumName` `lyricLineText` `duration` `progress` `playbackRate` `volume` `mute`
+
+其中 `volume` 是 0-100 的整数、`mute` 是布尔值；**读它们纯只读，不会改动任何状态**。
+
+想取默认集之外的字段，用 `filter` 传逗号分隔的字段名，可选的还有
+`picUrl`、`collect`、`lyric`、`tlyric`、`rlyric`、`lxlyric`、`lyricLineAllText`。
+例如 `filter: "name,volume"` 就只回这两个字段。
+
+### `lx_control` 的动作
+
+`action` 取值：`play` / `pause` / `next` / `prev` / `seek` / `volume` / `volume_up` / `volume_down` / `mute` / `collect` / `uncollect`。
+
+- `seek` 与音量类动作用 `value` 传参：`volume` 传 1-100 的绝对值，
+  `volume_up` / `volume_down` 传步长（不传则默认 4）。
+- `mute` 用 `mute: true|false` 传参。
+- 其余动作不需要额外参数。
 
 ### 一个重要的使用约定
 
