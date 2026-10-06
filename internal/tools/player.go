@@ -19,16 +19,28 @@ import (
 // ---------------------------------------------------------------------------
 
 type statusInput struct {
-	Filter string `json:"filter,omitempty" jsonschema:"可选。逗号分隔的字段过滤。默认返回 status、name、singer、albumName、lyricLineText、duration、progress、playbackRate。还可选 picUrl、collect、volume、mute、lyric、tlyric、rlyric、lxlyric"`
+	Filter string `json:"filter,omitempty" jsonschema:"可选。逗号分隔的字段过滤。默认返回 status、name、singer、albumName、lyricLineText、duration、progress、playbackRate、volume、mute。还可选 picUrl、collect、lyric、tlyric、rlyric、lxlyric"`
 }
+
+// defaultStatusFilter 是 lx_status 不传 filter 时请求的字段集。
+//
+// 它在 LX 服务端自己的默认集之上补了 volume 与 mute。理由：问「当前状态」时
+// 音量几乎总是上下文的一部分，而缺了它模型会绕道用 volume_up / volume_down
+// 去反推当前音量——那两个动作会真的改音量，是一次多余的副作用。
+// 显式传了 filter 时仍以传入值为准，这里不参与。
+const defaultStatusFilter = "status,name,singer,albumName,lyricLineText,duration,progress,playbackRate,volume,mute"
 
 func registerStatus(s *mcp.Server, d *Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "lx_status",
-		Description: "获取 LX Music 当前播放状态：正在播放的歌曲、播放/暂停、进度、音量等。" +
-			"返回 JSON。想判断\"在放什么\"优先用这个，而不是 lx_queue。",
+		Description: "获取 LX Music 当前播放状态：正在播放的歌曲、播放/暂停、进度、音量、静音等。" +
+			"返回 JSON，默认字段即含 volume 与 mute。想判断\"在放什么\"优先用这个，而不是 lx_queue。",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in statusInput) (*mcp.CallToolResult, any, error) {
-		raw, err := d.API.Status(ctx, in.Filter)
+		filter := in.Filter
+		if filter == "" {
+			filter = defaultStatusFilter
+		}
+		raw, err := d.API.Status(ctx, filter)
 		if err != nil {
 			return nil, nil, err
 		}

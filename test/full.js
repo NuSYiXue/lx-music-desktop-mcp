@@ -176,14 +176,17 @@ async function main () {
     const st0 = await expectOk('默认调用', 'lx_status', {})
     ok('包含 status 与 name 字段', !!(st0 && st0.status !== undefined && st0.name !== undefined),
       st0 ? JSON.stringify(st0).slice(0, 110) : '')
-    // 要恢复的字段必须**显式**取：lx_status 的默认返回不含 volume 与 mute，
-    // 从 st0 上读永远是 undefined，「收尾恢复音量」那段等于没跑
-    // （真实踩到过：跑完测试音量永远停在 55）。
-    const stSave = bodyOf(await call('lx_status', { filter: 'status,volume,mute' }))
+    // 默认返回就带 volume 与 mute，直接从 st0 取下要恢复的值即可。
+    // （曾经的坑：默认集不含这两个字段，从 st0 上读永远是 undefined，
+    //   「收尾恢复音量」那段等于没跑——真实踩到过：跑完测试音量永远停在 55。
+    //   这里顺带守住「默认即含」这个行为，免得哪天又被改回去。）
+    ok('默认返回即含 volume 与 mute',
+      !!(st0 && st0.volume !== undefined && st0.mute !== undefined),
+      st0 ? JSON.stringify(st0).slice(0, 110) : '')
     restore = {
-      status: stSave ? stSave.status : (st0 && st0.status),
-      volume: stSave && stSave.volume,
-      mute: stSave && stSave.mute,
+      status: st0 && st0.status,
+      volume: st0 && st0.volume,
+      mute: st0 && st0.mute,
     }
 
     const stFiltered = await expectOk('filter 指定字段', 'lx_status', { filter: 'name,singer' })

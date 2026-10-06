@@ -240,6 +240,14 @@ Cline 在扩展设置里），照抄上面 Claude Desktop 的写法即可。
 再由它回传上来，实测有 **1~2 秒**延迟。发出命令后等 2 秒再查 `lx_status`；
 短于这个时间读到旧值，不代表命令失败。
 
+**Q：怎么读当前音量？**
+
+`lx_status` 的默认返回里就有 `volume`（0-100）与 `mute`，纯只读，不改动任何状态。
+只想单独取音量时用 `lx_status` 的 `filter`：传 `volume`，返回 `{"volume":82}`。
+
+别用 `volume_up` / `volume_down` 反推当前音量——它们是「读 → 加减 → 写回」，
+会真的改一次音量。
+
 **Q：`volume_up` / `volume_down` 一次调多少？**
 
 不传 `value` 时一次调 4（与 LX 自己的音量快捷键一致：renderer 侧
