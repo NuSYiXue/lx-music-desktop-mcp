@@ -1,6 +1,6 @@
 # LX Music MCP Server — 接入指南
 
-本目录里有两个文件：
+本目录是一个**分发单元**，里面有两个文件：
 
 | 文件 | 说明 |
 |---|---|
@@ -9,17 +9,70 @@
 
 ---
 
+## 安装位置：只有一处
+
+**不管用户怎么说、不管你从哪个副本装，都装到同一个位置：**
+
+| 平台 | 目录 |
+|---|---|
+| Windows | `%UserProfile%\.lx-music-desktop-mcp\`（例如 `C:\Users\ZACK\.lx-music-desktop-mcp\`） |
+| macOS / Linux | `~/.lx-music-desktop-mcp/` |
+
+把 `lx-music-mcp.exe` 放进该目录，**所有 host 的配置都指向这一份**：
+
+```
+Windows       %UserProfile%\.lx-music-desktop-mcp\lx-music-mcp.exe
+macOS / Linux ~/.lx-music-desktop-mcp/lx-music-mcp.exe
+```
+
+### 为什么必须只有一处
+
+**不要**把它复制到工作目录、项目目录、绿色版目录里，再让配置指向那些副本。
+多份副本之间不会自动同步，升级时必然漏掉正在用的那一份——这个坑真实踩过：
+机器上曾同时存在四份，升级时更新了三份，偏偏漏掉了正在用的那份，于是「功能没生效」。
+
+所以：**这台机器上只保留 `%UserProfile%\.lx-music-desktop-mcp\` 这一份。**
+升级就是覆盖这一份，不需要同步任何其他地方。
+
+---
+
 ## 给 AI agent 的操作指令
 
-如果你是一个 AI agent，用户让你「把 LX Music 接入 MCP」，请照下面做：
+如果你是一个 AI agent，用户让你「把 LX Music 接入 MCP」——**无论他怎么描述、无论你在哪个工作区、
+无论你读到的是哪一份 README**——都照下面做：
 
-1. **先算出 exe 的绝对路径**：本文件所在目录 + `lx-music-mcp.exe`。
-   本文件的位置是已知的（你正在读它），据此推出 exe 的路径。**不要猜路径，也不要写什么占位符。**
-2. **判断当前 host 是哪一种**（Reasonix / Claude Desktop / Cursor / Cline / 其他），按下面对应的格式写配置。
-3. **写完后告诉用户重启 host**，配置才会生效。
-4. **验证**：让用户重启后，调用一次 `lx_status`。能返回当前歌曲信息就说明接好了。
+1. **把 exe 装到统一位置**（目录不存在就先建；已存在就覆盖，覆盖即升级）：
 
-如果 `lx_status` 报「无法连接 LX Music 的 Open API 服务」，见文末的常见问题。
+   Windows（bash / git-bash）：
+   ```bash
+   mkdir -p "$USERPROFILE/.lx-music-desktop-mcp" && \
+     cp "<你读到本文件的目录>/lx-music-mcp.exe" "$USERPROFILE/.lx-music-desktop-mcp/"
+   ```
+
+   macOS / Linux：
+   ```bash
+   mkdir -p ~/.lx-music-desktop-mcp && \
+     cp "<你读到本文件的目录>/lx-music-mcp.exe" ~/.lx-music-desktop-mcp/
+   ```
+
+   把本文件也一并复制过去（`cp "<你读到本文件的目录>/README.md"` 同目标目录），
+   方便以后在这个位置阅读。
+
+2. **算出绝对路径**：`%UserProfile%\.lx-music-desktop-mcp\lx-music-mcp.exe`
+   （macOS / Linux 为 `~/.lx-music-desktop-mcp/lx-music-mcp.exe`）。
+   **不要写占位符，也不要指向别处的副本。**
+
+3. **按 host 写配置**（格式见下），`command` 指向第 2 步的路径。
+
+4. **告诉用户重启 host / 重连该 server。**
+
+5. **验证**：调用一次 `lx_status`，能返回当前歌曲信息就说明接好了。
+
+> ⚠️ **只重启 host 不够。** 工具的名称与描述会被 host 缓存——重启后读到的可能仍是旧 schema，
+> 要等 server **实际连接一次**（发起任一次工具调用）才会刷新。若你看到的工具描述与实际不符，
+> 就再调用一次 `lx_status` 触发刷新。
+
+如果 `lx_status` 报「无法连接 LX Music 的 Open API 服务」，见文末常见问题。
 
 ---
 
@@ -34,19 +87,27 @@
 
 ## 接入配置
 
-把下面的路径换成第 1 步算出来的真实绝对路径。
-
 ### Reasonix
 
-写在项目根目录的 `./reasonix.toml`，或全局 `config.toml`（路径见 Reasonix 文档）：
+写在项目根目录的 `./reasonix.toml`，或全局 `config.toml`。
+Reasonix 会展开 `${VAR}`，所以 Windows 下推荐直接用环境变量（换机器/换用户名都不用改）：
 
 ```toml
 [[plugins]]
 name    = "lx-music"
-command = 'C:\path\to\mcp\lx-music-mcp.exe'
+command = '${USERPROFILE}\.lx-music-desktop-mcp\lx-music-mcp.exe'
 ```
 
-Windows 路径建议用 **TOML 单引号字面量字符串**（如上），这样反斜杠不需要转义。
+也可以写死绝对路径（TOML 单引号字面量字符串，反斜杠不需要转义）：
+
+```toml
+[[plugins]]
+name    = "lx-music"
+command = 'C:\Users\ZACK\.lx-music-desktop-mcp\lx-music-mcp.exe'
+```
+
+> 建议 `name` 统一用 `lx-music`。每个工作区用不同名字会让 host 把它们当成不同的 server
+> ——工具前缀不同、schema 缓存也各存一份，刷新时得各刷一次。
 
 ### Claude Desktop
 
@@ -56,7 +117,7 @@ Windows 路径建议用 **TOML 单引号字面量字符串**（如上），这�
 {
   "mcpServers": {
     "lx-music": {
-      "command": "C:/path/to/mcp/lx-music-mcp.exe"
+      "command": "C:/Users/ZACK/.lx-music-desktop-mcp/lx-music-mcp.exe"
     }
   }
 }
@@ -67,7 +128,8 @@ Windows 路径建议用 **TOML 单引号字面量字符串**（如上），这�
 这些 host 用的是同一套 `mcpServers` 结构（Cursor 在 `.cursor/mcp.json`，
 Cline 在扩展设置里），照抄上面 Claude Desktop 的写法即可。
 
-> JSON 里的路径建议用**正斜杠 `/`**，这样不必处理反斜杠转义。
+> JSON 里的路径建议用**正斜杠 `/`**，这样不必处理反斜杠转义；
+> 且 JSON 不支持 `${VAR}` 展开，必须写真实绝对路径。
 
 ### 需要改端口时
 
@@ -77,12 +139,21 @@ Cline 在扩展设置里），照抄上面 Claude Desktop 的写法即可。
 {
   "mcpServers": {
     "lx-music": {
-      "command": "C:/path/to/mcp/lx-music-mcp.exe",
+      "command": "C:/Users/ZACK/.lx-music-desktop-mcp/lx-music-mcp.exe",
       "env": { "LX_OPEN_API": "http://127.0.0.1:12345" }
     }
   }
 }
 ```
+
+---
+
+## 升级
+
+1. 用新版 `lx-music-mcp.exe` 覆盖 `%UserProfile%\.lx-music-desktop-mcp\lx-music-mcp.exe`；
+2. 在 host 里重连该 server，或让它实际连接一次（触发工具描述刷新）。
+
+就这两步——因为只有一个位置，**不需要同步任何副本**。
 
 ---
 
@@ -180,3 +251,8 @@ renderer 的回传延迟（见上一条 Q）。超过 5 秒就回落到读 `lx_s
 
 `lx_batch_add` 内置并发（5 路）和限流，几十首在十几秒内能完成。
 不要改成让模型循环调用 `lx_search` 几十次——那既慢又会撑爆上下文。
+
+**Q：装了新版本，但 host 里的工具描述还是旧的**
+
+工具描述被 host 缓存了。重启 host 只是让它重新读缓存；**要真正刷新，得让 server
+实际连接一次**——随便调用一个工具（例如 `lx_status`）即可。详见上文「给 AI agent 的操作指令」第 5 步。

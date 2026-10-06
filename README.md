@@ -30,15 +30,18 @@ go build -trimpath -ldflags "-s -w -X main.version=dev" -o mcp/lx-music-mcp.exe 
 
 ### 2. 接入
 
-见 [`mcp/README.md`](mcp/README.md)——那份文件是随产物一起分发的接入指南，
-里面的说明对人和 AI 都适用。
+见 [`mcp/README.md`](mcp/README.md)——接入指南，里面的说明对人和 AI 都适用。
 
-最简形式（Reasonix，项目根 `./reasonix.toml`）：
+**安装位置只有一处**：把 `mcp/lx-music-mcp.exe` 复制到 `%UserProfile%\.lx-music-desktop-mcp\`
+（macOS / Linux 为 `~/.lx-music-desktop-mcp/`），**所有 host 都指向这一份**。
+不要把 exe 散落在各个工作区 / 项目目录里——多份副本之间不会自动同步，升级时必然漏掉正在用的那份。
+
+最简形式（Reasonix，项目根 `./reasonix.toml`；`${USERPROFILE}` 会被展开）：
 
 ```toml
 [[plugins]]
 name    = "lx-music"
-command = 'C:\path\to\mcp\lx-music-mcp.exe'
+command = '${USERPROFILE}\.lx-music-desktop-mcp\lx-music-mcp.exe'
 ```
 
 ### 3. 前置条件
@@ -165,17 +168,14 @@ node test/full.js      # 全面功能测试（9 个工具每条分支 + 错误�
 
 本仓库**只依赖 LX 的 Open API**，不改 LX 一行代码。
 
-lx-music-desktop 那边只需要三处配合（属于后续工作，尚未实施）：
+两者的发布是**独立**的：
 
-1. `build-config/build-pack.js` 加 `extraFiles`，把本仓库产物复制到绿色版根目录的 `mcp/`
-2. `.gitignore` 忽略产物暂存目录
-3. 构建前确保产物就位
+- 绿色版（`lx-music-desktop-v<版本>-win_x64-green.zip`）只含播放器本身，**不含 `mcp/`**；
+- MCP server 走 `lx-music-mcp-v<版本>.zip`，解压后把 `lx-music-mcp.exe` 装到
+  `%UserProfile%\.lx-music-desktop-mcp\`，所有 host 指向那一份。
 
-这样绿色版解压后就是：
+这样升级 MCP 只需覆盖那一个文件，不必因为 MCP 改动而重打整个绿色版。
 
-```
-lx-music-desktop.exe
-mcp/
-├── lx-music-mcp.exe
-└── README.md
-```
+> 早期方案是把 `mcp/` 复制进绿色版根目录，结果是**每分发一处就多一份副本**，
+> 升级时容易漏掉正在用的那份（真实踩到过：机器上四份副本，更新了三份，偏偏漏了在用的）。
+> 已改为上面的独立分发 + 单一安装位置。
