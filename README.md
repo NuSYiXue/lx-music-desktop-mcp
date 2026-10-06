@@ -56,8 +56,8 @@ command = '${USERPROFILE}\.lx-music-desktop-mcp\lx-music-mcp.exe'
 
 | 工具 | 用途 |
 |---|---|
-| `lx_status` | 当前播放状态 |
-| `lx_control` | 播放 / 暂停 / 切歌 / 跳转 / 音量 / 静音 / 收藏 |
+| `lx_status` | 当前播放状态（默认含 `volume` / `mute`） |
+| `lx_control` | 播放 / 暂停 / 切歌 / 跳转 / 音量（设定或增减） / 静音 / 收藏 |
 | `lx_lyric` | 歌词 |
 | `lx_queue` | 播放队列 |
 | `lx_search` | 搜索（酷我 / 酷狗 / 咪咕 / QQ音乐 / 网易云） |
@@ -126,6 +126,17 @@ LX 的 Open API 里有一个 SSE 端点 `/subscribe-player-status`，连上去�
 
 所以 9 个工具是有意收敛的结果，而不是遗漏——23 个 HTTP 端点里覆盖了 22 个。
 
+### `lx_status` 的默认字段集定义在 server 侧
+
+LX 自己的默认状态集里**没有**音量与静音，而问「当前状态」时它们几乎总是上下文的一部分。
+缺了它们，模型只能靠 `volume_up` / `volume_down` 的返回值反推当前音量——而那两个动作是
+「读 → 加减 → 写回」，会真的改一次音量（真实发生过：为了读音量把音量抖了 1）。
+
+所以 `lx_status` 不传 `filter` 时用的是 server 侧定义的默认集
+（`internal/tools/player.go` 的 `defaultStatusFilter`），在 LX 默认集之上补了
+`volume` 与 `mute`；显式传 `filter` 时仍以传入值为准。
+`lxapi.Status` 保持「filter 为空则不传」的薄透传语义——这个取舍放在 tools 层。
+
 ---
 
 ## 项目结构
@@ -150,10 +161,10 @@ node test/e2e.js       # 端到端冒烟，不需要 LX 以外的任何依赖
 node test/full.js      # 全面功能测试（9 个工具每条分支 + 错误路径 + 并发可靠性）
 ```
 
-`test/full.js` 是主力验收脚本，覆盖：协议层握手与 schema、`lx_status` 字段过滤、
-`lx_control` 全部动作及其非法参数、歌词、队列、5 个音源逐一搜索、搜索各修饰参数、
-歌单 CRUD、歌单内歌曲增删改覆盖、批量入库的汇总自洽性，以及连续 20 次调用、
-并发 8 请求、并发 6 搜索等可靠性场景。
+`test/full.js` 是主力验收脚本，覆盖：协议层握手与 schema、`lx_status` 字段过滤与默认字段
+（含守着「默认即含 `volume` / `mute`」的断言）、`lx_control` 全部动作及其非法参数、
+歌词、队列、5 个音源逐一搜索、搜索各修饰参数、歌单 CRUD、歌单内歌曲增删改覆盖、
+批量入库的汇总自洽性，以及连续 20 次调用、并发 8 请求、并发 6 搜索等可靠性场景。
 
 两个脚本都会创建并自动删除测试歌单（`__MCP-SMOKE-TEST__` / `__MCP-FULL-TEST__`），
 但**都会切换当前播放**，跑之前请先知会用户。
